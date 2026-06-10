@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+:root {
+  --atlas-navy: #1E2A3A;
+  --atlas-ivory: #F8F4EC;
+  --atlas-gold: #F2C94C;
+  --atlas-blue: #4A90E2;
+  --atlas-coffee: #6F4E37;
+  --atlas-success: #27AE60;
+  --atlas-warning: #F2994A;
+  --atlas-error: #EB5757;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--atlas-ivory);
+  color: var(--atlas-navy);
+}
+
+* {
+  box-sizing: border-box;
+}

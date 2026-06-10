@@ -1,0 +1,128 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { Card } from '@/components/ui/Card'
+import { Badge } from '@/components/ui/Badge'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { StatsGrid, TodayCard } from '@/components/dashboard/StatsGrid'
+import { levelToLabel, levelToCEFR } from '@/lib/utils'
+import { ArrowRight, MessageCircle, Play, BookMarked, Zap } from 'lucide-react'
+import type { DashboardStats } from '@/types'
+
+// Mock stats for Sprint 1 — replaced by real Supabase queries in Sprint 2
+const MOCK_STATS: DashboardStats = {
+  currentLevel: 1,
+  cefrEstimate: 'A0',
+  streak: 3,
+  vocabularyCount: 0,
+  lessonsCompleted: 0,
+  weeklyProgress: 15,
+  todaysLesson: {
+    id: 'mock-lesson-1',
+    level: 1,
+    module_name: 'Greetings and Introductions',
+    lesson_title: 'Hola Colombia — Your First Words',
+    lesson_goal: 'Greet people confidently and introduce yourself in Colombian Spanish',
+    vocabulary: [],
+    grammar_focus: 'Ser — to be (identity)',
+    scenario: 'Meeting someone new at a café in Bogotá',
+    created_at: new Date().toISOString(),
+  },
+  dueForReview: 0,
+  recentMistakes: [],
+}
+
+const QUICK_ACTIONS = [
+  { href: '/coach', icon: MessageCircle, label: 'Chat with Coach', color: 'text-[#4A90E2]', bg: 'bg-[#4A90E2]/10' },
+  { href: '/roleplays', icon: Play, label: 'Role Play', color: 'text-[#27AE60]', bg: 'bg-[#27AE60]/10' },
+  { href: '/vocabulary', icon: BookMarked, label: 'Review Words', color: 'text-[#F2994A]', bg: 'bg-[#F2994A]/10' },
+  { href: '/lesson', icon: Zap, label: 'Quick Lesson', color: 'text-[#F2C94C]', bg: 'bg-[#F2C94C]/10' },
+]
+
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  const name = user.user_metadata?.name ?? 'there'
+  const stats = MOCK_STATS
+
+  const greeting = () => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Buenos días'
+    if (h < 18) return 'Buenas tardes'
+    return 'Buenas noches'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm text-[#6F4E37]/60 font-medium">{greeting()},</p>
+          <h1 className="text-2xl font-bold text-[#1E2A3A] tracking-tight">{name}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant="navy">{levelToLabel(stats.currentLevel)}</Badge>
+            <Badge variant="gold">{levelToCEFR(stats.currentLevel)}</Badge>
+          </div>
+        </div>
+        <Link
+          href="/lesson"
+          className="inline-flex items-center gap-2 bg-[#1E2A3A] text-[#F8F4EC] px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-[#2a3a50] transition-all active:scale-[0.98]"
+        >
+          Start lesson <ArrowRight className="w-4 h-4" />
+        </Link>
+      </div>
+
+      {/* Stats */}
+      <StatsGrid stats={stats} />
+
+      {/* Today's lesson + review */}
+      <TodayCard
+        lesson={stats.todaysLesson}
+        dueForReview={stats.dueForReview}
+        weeklyProgress={stats.weeklyProgress}
+      />
+
+      {/* Quick actions */}
+      <div>
+        <h2 className="text-sm font-semibold text-[#1E2A3A]/50 uppercase tracking-wide mb-3">Quick actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {QUICK_ACTIONS.map(({ href, icon: Icon, label, color, bg }) => (
+            <Link
+              key={href}
+              href={href}
+              className="bg-white rounded-2xl border border-[#1E2A3A]/8 p-4 flex flex-col items-center gap-2 hover:shadow-md hover:-translate-y-[1px] transition-all duration-200 group"
+            >
+              <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
+                <Icon className={`w-5 h-5 ${color}`} />
+              </div>
+              <span className="text-xs font-medium text-[#1E2A3A]/70 text-center">{label}</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Level progress */}
+      <Card>
+        <h2 className="text-sm font-semibold text-[#1E2A3A] mb-4">Level progress</h2>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5, 6].map(lvl => (
+            <div key={lvl} className="flex items-center gap-3">
+              <span className="text-xs text-[#1E2A3A]/40 w-4">{lvl}</span>
+              <ProgressBar
+                value={lvl === stats.currentLevel ? stats.weeklyProgress : lvl < stats.currentLevel ? 100 : 0}
+                color={lvl < stats.currentLevel ? 'green' : lvl === stats.currentLevel ? 'gold' : 'blue'}
+                className="flex-1"
+              />
+              <span className="text-xs text-[#6F4E37]/50 w-20 text-right truncate">
+                {levelToLabel(lvl as 1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
