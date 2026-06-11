@@ -53,5 +53,44 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true })
+  // Adaptive progression: level up when every lesson at the current level is done
+  let levelUp = false
+  let newLevel: number | null = null
+
+  const { data: userData } = await supabase
+    .from('users')
+    .select('current_level')
+    .eq('id', user.id)
+    .single()
+
+  const currentLevel = userData?.current_level ?? 1
+
+  if (currentLevel < 6) {
+    const { data: levelLessons } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('level', currentLevel)
+
+    const levelLessonIds = (levelLessons ?? []).map(l => l.id)
+
+    if (levelLessonIds.length > 0) {
+      const { count: completedCount } = await supabase
+        .from('user_lessons')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'completed')
+        .in('lesson_id', levelLessonIds)
+
+      if ((completedCount ?? 0) >= levelLessonIds.length) {
+        newLevel = currentLevel + 1
+        const { error: levelError } = await supabase
+          .from('users')
+          .update({ current_level: newLevel, updated_at: new Date().toISOString() })
+          .eq('id', user.id)
+        levelUp = !levelError
+      }
+    }
+  }
+
+  return NextResponse.json({ success: true, levelUp, newLevel: levelUp ? newLevel : null })
 }

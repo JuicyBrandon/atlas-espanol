@@ -29,6 +29,7 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const [correction, setCorrection] = useState<CorrectionResult | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [completing, setCompleting] = useState(false)
+  const [newLevel, setNewLevel] = useState<number | null>(null)
 
   const saveWord = (idx: number) => setSavedWords(prev => new Set([...prev, idx]))
 
@@ -53,7 +54,7 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const handleComplete = async () => {
     setCompleting(true)
     try {
-      await fetch('/api/lesson/complete', {
+      const res = await fetch('/api/lesson/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,6 +64,10 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
           score: correction?.severity === 'green' ? 95 : correction?.severity === 'yellow' ? 75 : 60,
         }),
       })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.levelUp && data.newLevel) setNewLevel(data.newLevel)
+      }
     } catch {
       // Non-fatal
     } finally {
@@ -287,9 +292,13 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
           <div className="w-14 h-14 bg-[#F2C94C]/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-7 h-7 text-[#F2C94C]" />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">¡Lección completa!</h2>
+          <h2 className="text-xl font-bold text-white mb-2">
+            {newLevel ? `¡Subiste de nivel! Level ${newLevel}` : '¡Lección completa!'}
+          </h2>
           <p className="text-white/60 text-sm mb-6">
-            {lesson.vocabulary.length} words added to your vocabulary bank. Keep the streak going.
+            {newLevel
+              ? `You completed every lesson at Level ${lesson.level} — welcome to Level ${newLevel}. New lessons and scenarios are now unlocked.`
+              : `${lesson.vocabulary.length} words added to your vocabulary bank. Keep the streak going.`}
           </p>
           <div className="grid grid-cols-3 gap-3 mb-6">
             {[

@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { StatsGrid, TodayCard } from '@/components/dashboard/StatsGrid'
 import { levelToLabel, levelToCEFR, calculateStreak } from '@/lib/utils'
-import { ArrowRight, MessageCircle, Play, BookMarked, Wand2 } from 'lucide-react'
+import { computeRecommendation, withinDays } from '@/lib/progress'
+import { ArrowRight, MessageCircle, Play, BookMarked, Wand2, Compass } from 'lucide-react'
 import type { DashboardStats, Lesson, SpanishLevel } from '@/types'
 
 const QUICK_ACTIONS = [
@@ -78,13 +79,6 @@ export default async function DashboardPage() {
     .order('sort_order')
 
   if (levelLessons?.length) {
-    const completedIds = new Set(
-      completedLessonDates
-        ?.map(l => l as { completed_at: string | null })
-        .map(() => '') ?? []
-    )
-
-    // Get completed lesson IDs
     const { data: completedUserLessons } = await supabase
       .from('user_lessons')
       .select('lesson_id')
@@ -93,12 +87,24 @@ export default async function DashboardPage() {
 
     const doneIds = new Set(completedUserLessons?.map(ul => ul.lesson_id) ?? [])
     todaysLesson = levelLessons.find(l => !doneIds.has(l.id)) ?? levelLessons[0]
-    void completedIds
   }
 
-  const weeklyProgress = lessonsCount
-    ? Math.min(Math.round((lessonsCount / 5) * 100), 100)
-    : 0
+  // Weekly goal: 5 sessions in the last 7 days
+  const lessonsThisWeek = withinDays(completedLessonDates ?? [], l => l.completed_at, 7).length
+  const weeklyProgress = Math.min(Math.round((lessonsThisWeek / 5) * 100), 100)
+
+  // Adaptive recommendation
+  const { count: rolePlayCount } = await supabase
+    .from('role_play_sessions')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+
+  const recommendation = computeRecommendation({
+    dueReviews: dueCount ?? 0,
+    recentCorrections: recentMistakes ?? [],
+    rolePlayCount: rolePlayCount ?? 0,
+    userLevel: currentLevel,
+  })
 
   const stats: DashboardStats = {
     currentLevel,
@@ -148,6 +154,25 @@ export default async function DashboardPage() {
         dueForReview={stats.dueForReview}
         weeklyProgress={stats.weeklyProgress}
       />
+
+      {/* Recommended next action */}
+      <Link
+        href={recommendation.href}
+        className="flex items-center justify-between gap-3 bg-white rounded-2xl border border-[#F2C94C]/40 p-4 hover:shadow-md hover:-translate-y-[1px] transition-all duration-200"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#F2C94C]/15 flex items-center justify-center shrink-0">
+            <Compass className="w-5 h-5 text-[#B8902A]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#1E2A3A]">{recommendation.title}</p>
+            <p className="text-xs text-[#6F4E37]/70 truncate">{recommendation.description}</p>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-[#4A90E2] shrink-0 inline-flex items-center gap-1">
+          {recommendation.cta} <ArrowRight className="w-3 h-3" />
+        </span>
+      </Link>
 
       {/* Quick actions */}
       <div>
