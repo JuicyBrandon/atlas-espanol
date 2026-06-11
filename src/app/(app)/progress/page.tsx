@@ -11,7 +11,7 @@ export default function ProgressPage() {
       <Card className="flex flex-col items-center gap-3 py-16 text-center">
         <Construction className="w-8 h-8 text-[#F2C94C]" />
         <p className="text-sm text-[#6F4E37]/70">Progress intelligence ships in Sprint 4.</p>
-        <p className="text-xs text-[#1E2A3A]/30">You'll see CEFR estimates, weekly reports, and improvement curves.</p>
+        <p className="text-xs text-[#1E2A3A]/30">You&apos;ll see CEFR estimates, weekly reports, and improvement curves.</p>
       </Card>
     </div>
   )

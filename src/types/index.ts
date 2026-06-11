@@ -76,15 +76,24 @@ export interface UserProfile {
   updated_at: string
 }
 
+// Vocabulary word as stored in the lessons.vocabulary JSONB column
+export interface LessonWord {
+  spanish: string
+  english: string
+  colombian: string
+  note?: string
+}
+
 export interface Lesson {
   id: string
   level: SpanishLevel
   module_name: string
   lesson_title: string
   lesson_goal: string
-  vocabulary: VocabularyItem[]
+  vocabulary: LessonWord[]
   grammar_focus: string
   scenario: string
+  sort_order: number
   created_at: string
 }
 

@@ -54,3 +54,63 @@ export function severityColor(severity: 'green' | 'yellow' | 'red'): string {
     red: 'text-red-600 bg-red-50 border-red-200',
   }[severity]
 }
+
+const DAY_MS = 86_400_000
+
+export function calculateStreak(completedDates: string[]): number {
+  if (!completedDates.length) return 0
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const uniqueDays = new Set(
+    completedDates.map(d => {
+      const date = new Date(d)
+      date.setHours(0, 0, 0, 0)
+      return date.getTime()
+    })
+  )
+
+  let current = today.getTime()
+
+  // Allow streak to continue if nothing done today yet (check from yesterday)
+  if (!uniqueDays.has(current)) current -= DAY_MS
+  if (!uniqueDays.has(current)) return 0
+
+  let streak = 0
+  while (uniqueDays.has(current)) {
+    streak++
+    current -= DAY_MS
+  }
+  return streak
+}
+
+const VOCAB_STATUS_ORDER = ['new', 'learning', 'weak', 'strong', 'mastered'] as const
+
+export function advanceVocabStatus(
+  status: string,
+  correct: boolean
+): string {
+  const idx = VOCAB_STATUS_ORDER.indexOf(status as typeof VOCAB_STATUS_ORDER[number])
+  const base = idx < 0 ? 0 : idx
+  if (correct) return VOCAB_STATUS_ORDER[Math.min(base + 1, VOCAB_STATUS_ORDER.length - 1)]
+  return VOCAB_STATUS_ORDER[Math.max(base - 1, 1)]
+}
+
+export function nextReviewDate(newStatus: string): Date {
+  const daysMap: Record<string, number> = {
+    new: 0,
+    learning: 1,
+    weak: 3,
+    strong: 7,
+    mastered: 30,
+  }
+  const days = daysMap[newStatus] ?? 1
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+export function severityLabel(severity: 'green' | 'yellow' | 'red'): string {
+  return { green: 'Correct', yellow: 'Awkward', red: 'Incorrect' }[severity]
+}
