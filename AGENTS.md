@@ -35,7 +35,8 @@ src/
       onboarding/    Multi-step onboarding wizard
       lesson/        Lesson player
       coach/         AI coach chat
-      roleplays/     Role play modes
+      roleplays/     Role play modes ([mode] dynamic route, ?scenario= launches session)
+      colombianise/  Colombianise It — 5-tone phrase converter
       vocabulary/    Spaced repetition review
       corrections/   Mistake history
       progress/      Analytics dashboard
@@ -50,6 +51,7 @@ src/
   lib/
     supabase/        client.ts, server.ts, middleware.ts
     ai-provider.ts   Multi-provider AI factory (Anthropic, OpenAI, compatible)
+    roleplay-scenarios.ts  20 scenarios across 4 modes with characters
     utils.ts         cn(), levelToLabel(), severityColor(), calculateStreak()
     constants.ts     Palette, levels, options
   types/
@@ -57,9 +59,12 @@ src/
   app/
     api/
       coach/         POST — streaming AI coach
+      colombianise/  POST — 5-tone Colombian phrase conversion
       corrections/analyze/  POST — analyse Spanish, save to DB
       lesson/complete/      POST — save progress + vocab bank
       onboarding/    POST — save user profile to Supabase
+      roleplay/      POST — streaming in-character role play
+      roleplay/end/  POST — AI debrief, saves session + corrections + vocab
       vocabulary/review/    POST — SRS update
 supabase/
   migrations/        001_initial_schema.sql, 002_sprint2_constraints.sql
@@ -101,7 +106,7 @@ npx tsc --noEmit     # Type check
 |---|---|---|
 | 1 | Foundation — Auth, Shell, Onboarding, Dashboard, Lesson | COMPLETE |
 | 2 | Curriculum, AI Lesson Gen, Corrections, Vocabulary | COMPLETE |
-| 3 | Role Plays (Sales, Dating, Travel), Colombianise It | TODO |
+| 3 | Role Plays (Sales, Dating, Travel, Social), Colombianise It | COMPLETE |
 | 4 | Vocabulary Review, Progress Dashboard, Weekly Review | TODO |
 | 5 | Voice Notes, Audio Recording, Transcription | TODO |
 

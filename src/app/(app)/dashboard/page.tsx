@@ -6,14 +6,14 @@ import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { StatsGrid, TodayCard } from '@/components/dashboard/StatsGrid'
 import { levelToLabel, levelToCEFR, calculateStreak } from '@/lib/utils'
-import { ArrowRight, MessageCircle, Play, BookMarked, Zap } from 'lucide-react'
+import { ArrowRight, MessageCircle, Play, BookMarked, Wand2 } from 'lucide-react'
 import type { DashboardStats, Lesson, SpanishLevel } from '@/types'
 
 const QUICK_ACTIONS = [
   { href: '/coach', icon: MessageCircle, label: 'Chat with Coach', color: 'text-[#4A90E2]', bg: 'bg-[#4A90E2]/10' },
   { href: '/roleplays', icon: Play, label: 'Role Play', color: 'text-[#27AE60]', bg: 'bg-[#27AE60]/10' },
   { href: '/vocabulary', icon: BookMarked, label: 'Review Words', color: 'text-[#F2994A]', bg: 'bg-[#F2994A]/10' },
-  { href: '/lesson', icon: Zap, label: 'Quick Lesson', color: 'text-[#F2C94C]', bg: 'bg-[#F2C94C]/10' },
+  { href: '/colombianise', icon: Wand2, label: 'Colombianise It', color: 'text-[#F2C94C]', bg: 'bg-[#F2C94C]/10' },
 ]
 
 export default async function DashboardPage() {
