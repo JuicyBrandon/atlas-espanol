@@ -49,13 +49,21 @@ src/
     lesson/          (Sprint 2)
   lib/
     supabase/        client.ts, server.ts, middleware.ts
-    utils.ts         cn(), levelToLabel(), severityColor()
+    ai-provider.ts   Multi-provider AI factory (Anthropic, OpenAI, compatible)
+    utils.ts         cn(), levelToLabel(), severityColor(), calculateStreak()
     constants.ts     Palette, levels, options
   types/
-    index.ts         All TypeScript types
+    index.ts         All TypeScript types (incl. LessonWord)
+  app/
+    api/
+      coach/         POST — streaming AI coach
+      corrections/analyze/  POST — analyse Spanish, save to DB
+      lesson/complete/      POST — save progress + vocab bank
+      onboarding/    POST — save user profile to Supabase
+      vocabulary/review/    POST — SRS update
 supabase/
-  migrations/        001_initial_schema.sql
-  seed/              curriculum_level1.sql
+  migrations/        001_initial_schema.sql, 002_sprint2_constraints.sql
+  seed/              curriculum_level1.sql, curriculum_levels2to6.sql
 ```
 
 ---
@@ -92,7 +100,7 @@ npx tsc --noEmit     # Type check
 | Sprint | Focus | Status |
 |---|---|---|
 | 1 | Foundation — Auth, Shell, Onboarding, Dashboard, Lesson | COMPLETE |
-| 2 | Curriculum, AI Lesson Gen, Corrections, Vocabulary | TODO |
+| 2 | Curriculum, AI Lesson Gen, Corrections, Vocabulary | COMPLETE |
 | 3 | Role Plays (Sales, Dating, Travel), Colombianise It | TODO |
 | 4 | Vocabulary Review, Progress Dashboard, Weekly Review | TODO |
 | 5 | Voice Notes, Audio Recording, Transcription | TODO |
@@ -105,7 +113,7 @@ npx tsc --noEmit     # Type check
 - **RLS enforced** on all tables — never bypass using service role in client code
 - **Colombian Spanish always** — never default to Spain or Mexican Spanish
 - **Corrections are colour-coded**: green (correct), yellow (awkward), red (wrong)
-- **Mock AI responses** in Sprint 1 — replace with real API in Sprint 3
+- **AI is live from Sprint 2** — multi-provider via Vercel AI SDK (see Environment Variables)
 - **No emojis in UI** — use Lucide icons throughout
 
 ---
@@ -121,10 +129,30 @@ All tables have RLS. Auto-trigger creates `users` row on `auth.users` insert.
 ## Environment Variables
 
 ```
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY      (server-side only)
-ANTHROPIC_API_KEY              (Sprint 3)
+
+# AI Provider — choose one setup:
+
+# Option A: Anthropic (Claude)
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Option B: OpenAI (GPT-4o, etc.)
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# Option C: Any OpenAI-compatible API
+# (Groq, Together AI, Perplexity, Mistral, Ollama, etc.)
+AI_PROVIDER=compatible
+AI_API_KEY=your-key-here
+AI_BASE_URL=https://api.groq.com/openai/v1   # provider base URL
+AI_MODEL=llama-3.3-70b-versatile            # model name override (optional)
+```
+
+App runs fully without an AI key — mock responses are used as a fallback.
 ```
 
 ---

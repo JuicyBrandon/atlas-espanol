@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import ChatWindow from '@/components/coach/ChatWindow'
 import { Badge } from '@/components/ui/Badge'
 import type { ChatMessage } from '@/types'
@@ -16,10 +16,6 @@ export default function CoachPage() {
   const [loading, setLoading] = useState(false)
   const [userLevel] = useState(1)
 
-  useEffect(() => {
-    // Reserved for loading user level in a future update
-  }, [])
-
   const handleSend = async (text: string) => {
     const userMsg: ChatMessage = {
       role: 'user',
@@ -31,7 +27,6 @@ export default function CoachPage() {
     setMessages(newMessages)
     setLoading(true)
 
-    // Optimistic placeholder for assistant reply
     const placeholder: ChatMessage = {
       role: 'assistant',
       content: '',
@@ -49,23 +44,52 @@ export default function CoachPage() {
         }),
       })
 
-      const data = await res.json()
-      const reply: ChatMessage = {
-        role: 'assistant',
-        content: data.content || '¡Disculpa! Something went wrong. Try again in a moment.',
-        timestamp: new Date().toISOString(),
-      }
+      const contentType = res.headers.get('content-type') ?? ''
 
-      setMessages(prev => {
-        const updated = [...prev]
-        updated[updated.length - 1] = reply
-        return updated
-      })
+      if (contentType.includes('text/plain') && res.body) {
+        // Streaming response — show loading until first token, then update live
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let fullText = ''
+        let firstChunk = true
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          fullText += decoder.decode(value, { stream: true })
+
+          if (firstChunk) {
+            setLoading(false)
+            firstChunk = false
+          }
+
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: fullText,
+            }
+            return updated
+          })
+        }
+      } else {
+        // JSON fallback (mock mode)
+        const data = await res.json()
+        setMessages(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            content: data.content ?? '¡Disculpa! Something went wrong. Try again in a moment.',
+          }
+          return updated
+        })
+      }
     } catch {
       setMessages(prev => {
         const updated = [...prev]
         updated[updated.length - 1] = {
-          ...placeholder,
+          ...updated[updated.length - 1],
           content: '¡Disculpa! I couldn\'t connect right now. Try again in a moment.',
         }
         return updated
