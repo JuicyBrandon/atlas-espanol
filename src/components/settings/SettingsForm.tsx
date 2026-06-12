@@ -123,7 +123,10 @@ export default function SettingsForm({ user, email }: SettingsFormProps) {
               <Badge variant="navy">Level {user.current_level}</Badge>
               <span className="text-sm text-[#1E2A3A]/60">{levelToLabel(user.current_level as SpanishLevel)}</span>
             </div>
-            <p className="text-xs text-[#6F4E37]/50 px-1">Level advances automatically as you complete lessons.</p>
+            <p className="text-xs text-[#6F4E37]/50 px-1">
+            Level advances automatically as you complete lessons.{' '}
+            <a href="/placement" className="text-[#4A90E2] hover:underline">Take the placement test</a> to skip ahead.
+          </p>
           </div>
         </div>
       </Card>

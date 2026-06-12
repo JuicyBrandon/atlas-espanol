@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, BookOpen, MessageCircle, Play,
   BookMarked, AlertCircle, TrendingUp, Settings,
-  Menu, X, Flame, Globe, Wand2, Mic
+  Menu, X, Flame, Globe, Wand2, Mic, ClipboardList
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { href: '/vocabulary', label: 'Vocabulary', icon: BookMarked },
   { href: '/corrections', label: 'Corrections', icon: AlertCircle },
   { href: '/progress', label: 'Progress', icon: TrendingUp },
+  { href: '/placement', label: 'Placement Test', icon: ClipboardList },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]
 

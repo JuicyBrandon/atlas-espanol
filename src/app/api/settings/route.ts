@@ -12,6 +12,7 @@ const ALLOWED_FIELDS = [
   'learning_intensity',
   'main_goal',
   'target_accent',
+  'current_level',
 ] as const
 
 type AllowedField = (typeof ALLOWED_FIELDS)[number]
@@ -39,6 +40,10 @@ function validate(body: Record<string, unknown>): string | null {
     return 'Invalid main_goal'
   if (body.target_accent !== undefined && !VALID_ACCENTS.includes(body.target_accent as ColombianFocus))
     return 'Invalid target_accent'
+  if (body.current_level !== undefined) {
+    const l = body.current_level as number
+    if (!Number.isInteger(l) || l < 1 || l > 6) return 'Invalid current_level'
+  }
   return null
 }
 

@@ -110,6 +110,7 @@ npx tsc --noEmit     # Type check
 | 4 | Vocabulary Review, Progress Dashboard, Weekly Review | COMPLETE |
 | 5 | Voice Notes, Audio Recording, Transcription | COMPLETE |
 | 6 | Settings Page, Achievements System | COMPLETE |
+| 7 | AI Lesson Generation, Placement Test | COMPLETE |
 
 ---
 

@@ -66,16 +66,19 @@ export async function POST(req: NextRequest) {
 
   if (currentLevel < 6) {
     const [{ count: totalAtLevel }, { count: completedCount }] = await Promise.all([
+      // Exclude AI-generated lessons from the level-up count
       supabase
         .from('lessons')
         .select('*', { count: 'exact', head: true })
-        .eq('level', currentLevel),
+        .eq('level', currentLevel)
+        .eq('is_generated', false),
       supabase
         .from('user_lessons')
-        .select('lesson_id, lessons!inner(level)', { count: 'exact', head: true })
+        .select('lesson_id, lessons!inner(level, is_generated)', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'completed')
-        .eq('lessons.level', currentLevel),
+        .eq('lessons.level', currentLevel)
+        .eq('lessons.is_generated', false),
     ])
 
     if ((totalAtLevel ?? 0) > 0 && (completedCount ?? 0) >= (totalAtLevel ?? 0)) {
