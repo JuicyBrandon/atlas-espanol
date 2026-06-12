@@ -107,7 +107,7 @@ npx tsc --noEmit     # Type check
 | 1 | Foundation — Auth, Shell, Onboarding, Dashboard, Lesson | COMPLETE |
 | 2 | Curriculum, AI Lesson Gen, Corrections, Vocabulary | COMPLETE |
 | 3 | Role Plays (Sales, Dating, Travel, Social), Colombianise It | COMPLETE |
-| 4 | Vocabulary Review, Progress Dashboard, Weekly Review | TODO |
+| 4 | Vocabulary Review, Progress Dashboard, Weekly Review | COMPLETE |
 | 5 | Voice Notes, Audio Recording, Transcription | TODO |
 
 ---
