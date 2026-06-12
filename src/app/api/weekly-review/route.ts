@@ -1,7 +1,7 @@
 import { generateText } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { getAIModel, isAIConfigured } from '@/lib/ai-provider'
-import { computeSkillScores, SESSIONS_PER_REVIEW } from '@/lib/progress'
+import { computeSkillScores, sessionsSince, labelCategory, SESSIONS_PER_REVIEW } from '@/lib/progress'
 import { calculateStreak, levelToCEFR } from '@/lib/utils'
 import { NextResponse } from 'next/server'
 import type { SpanishLevel } from '@/types'
@@ -12,55 +12,36 @@ export async function POST() {
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // Last review marks the start of the current period
-  const { data: lastReview } = await supabase
-    .from('weekly_reviews')
-    .select('created_at')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const periodStart = lastReview?.created_at ?? new Date(0).toISOString()
-
-  const [
-    { data: userData },
-    { data: periodLessons },
-    { data: periodPlays },
-    { data: periodCorrections },
-    { data: allVocab },
-    { data: allCompletedLessons },
-  ] = await Promise.all([
-    supabase.from('users').select('current_level, name').eq('id', user.id).single(),
+  // --- Eligibility gate first, with lightweight queries only ---
+  const [{ data: lastReview }, { data: allLessons }, { data: allPlays }] = await Promise.all([
     supabase
-      .from('user_lessons')
-      .select('completed_at')
+      .from('weekly_reviews')
+      .select('created_at')
       .eq('user_id', user.id)
-      .eq('status', 'completed')
-      .gte('completed_at', periodStart),
-    supabase
-      .from('role_play_sessions')
-      .select('mode, score, scenario, created_at')
-      .eq('user_id', user.id)
-      .gte('created_at', periodStart),
-    supabase
-      .from('corrections')
-      .select('severity, category, original_text, created_at')
-      .eq('user_id', user.id)
-      .gte('created_at', periodStart),
-    supabase
-      .from('vocabulary_items')
-      .select('spanish, status, times_seen, times_correct, updated_at')
-      .eq('user_id', user.id),
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     supabase
       .from('user_lessons')
       .select('completed_at')
       .eq('user_id', user.id)
       .eq('status', 'completed')
       .not('completed_at', 'is', null),
+    supabase
+      .from('role_play_sessions')
+      .select('mode, score, scenario, created_at')
+      .eq('user_id', user.id),
   ])
 
-  const sessionsThisPeriod = (periodLessons?.length ?? 0) + (periodPlays?.length ?? 0)
+  const periodStart = lastReview?.created_at ?? null
+  const lessonDates = (allLessons ?? []).map(l => l.completed_at)
+  const plays = allPlays ?? []
+
+  const sessionsThisPeriod = sessionsSince(
+    lessonDates,
+    plays.map(p => p.created_at),
+    periodStart
+  )
 
   if (sessionsThisPeriod < SESSIONS_PER_REVIEW) {
     return NextResponse.json(
@@ -73,13 +54,40 @@ export async function POST() {
     )
   }
 
+  // --- Eligible: fetch the heavier data ---
+  const [{ data: userData }, { data: allVocab }, { data: recentCorrections }] = await Promise.all([
+    supabase.from('users').select('current_level, name').eq('id', user.id).single(),
+    supabase
+      .from('vocabulary_items')
+      .select('spanish, status, times_seen, times_correct, mastered_at')
+      .eq('user_id', user.id),
+    supabase
+      .from('corrections')
+      .select('severity, category, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(200),
+  ])
+
   const level = (userData?.current_level ?? 1) as SpanishLevel
   const vocab = allVocab ?? []
-  const corrections = periodCorrections ?? []
+  const corrections = recentCorrections ?? []
 
-  // Words mastered during this period
+  const periodStartMs = periodStart ? new Date(periodStart).getTime() : 0
+  const periodCorrections = corrections.filter(
+    c => new Date(c.created_at).getTime() >= periodStartMs
+  )
+  const periodLessonCount = lessonDates.filter(
+    (d): d is string => !!d && new Date(d).getTime() >= periodStartMs
+  ).length
+  const periodPlays = plays.filter(p => new Date(p.created_at).getTime() >= periodStartMs)
+
+  // Words that genuinely became mastered during this period
   const newWordsMastered = vocab.filter(
-    v => v.status === 'mastered' && new Date(v.updated_at).getTime() >= new Date(periodStart).getTime()
+    v =>
+      v.status === 'mastered' &&
+      v.mastered_at &&
+      new Date(v.mastered_at).getTime() >= periodStartMs
   ).length
 
   const weakWords = vocab
@@ -89,42 +97,39 @@ export async function POST() {
 
   // Top recurring error categories this period
   const categoryCounts = new Map<string, number>()
-  for (const c of corrections) {
+  for (const c of periodCorrections) {
     categoryCounts.set(c.category, (categoryCounts.get(c.category) ?? 0) + 1)
   }
   const topErrors = [...categoryCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
-    .map(([category, count]) => `${category.replace(/_/g, ' ')} (${count}x)`)
+    .map(([category, count]) => `${labelCategory(category)} (${count}x)`)
 
-  const streak = calculateStreak(
-    (allCompletedLessons ?? [])
-      .map(l => l.completed_at)
-      .filter((d): d is string => !!d)
-  )
+  const streak = calculateStreak(lessonDates.filter((d): d is string => !!d))
 
+  // Skill scores from ALL-TIME data — the same window the progress page
+  // displays, so saved snapshots match what the user sees on screen.
   const scores = computeSkillScores({
     vocabItems: vocab,
-    corrections: corrections.map(c => ({
-      severity: c.severity,
-      category: c.category,
-      created_at: c.created_at,
-    })),
-    rolePlays: (periodPlays ?? []).map(p => ({ mode: p.mode, score: p.score })),
-    lessonsCompleted: periodLessons?.length ?? 0,
+    corrections,
+    rolePlays: plays,
+    lessonsCompleted: lessonDates.length,
     streak,
   })
 
-  let summary: string
-  let nextFocus: string
+  // Fallback copy, overwritten by AI when configured
+  let summary = buildTemplateSummary(periodLessonCount, periodPlays.length, newWordsMastered, periodCorrections.length)
+  let nextFocus = weakWords.length
+    ? `Focus on your ${weakWords.length} weak words this week — review them daily until they stick.`
+    : 'Keep your daily lesson rhythm going and add one role play this week.'
 
   if (isAIConfigured()) {
     const prompt = `You are Atlas Español, a Colombian Spanish coach writing a weekly review for ${userData?.name ?? 'your student'} (Level ${level}/6, ~${levelToCEFR(level)}).
 
 This period's data:
-- Lessons completed: ${periodLessons?.length ?? 0}
-- Role plays: ${(periodPlays ?? []).map(p => `${p.scenario} (${p.score ?? 'n/a'})`).join(', ') || 'none'}
-- Corrections received: ${corrections.length} (top categories: ${topErrors.join(', ') || 'none'})
+- Lessons completed: ${periodLessonCount}
+- Role plays: ${periodPlays.map(p => `${p.scenario} (${p.score ?? 'n/a'})`).join(', ') || 'none'}
+- Corrections received: ${periodCorrections.length} (top categories: ${topErrors.join(', ') || 'none'})
 - Words mastered this period: ${newWordsMastered}
 - Still-weak words: ${weakWords.join(', ') || 'none'}
 - Current streak: ${streak} days
@@ -145,19 +150,10 @@ Return ONLY valid JSON (no markdown):
       summary = parsed.summary
       nextFocus = parsed.next_focus
     } catch {
-      summary = buildTemplateSummary(periodLessons?.length ?? 0, periodPlays?.length ?? 0, newWordsMastered, corrections.length)
-      nextFocus = weakWords.length
-        ? `Focus on your ${weakWords.length} weak words this week — review them daily until they stick.`
-        : 'Keep your daily lesson rhythm going and add one role play this week.'
+      // Keep the template fallback
     }
-  } else {
-    summary = buildTemplateSummary(periodLessons?.length ?? 0, periodPlays?.length ?? 0, newWordsMastered, corrections.length)
-    nextFocus = weakWords.length
-      ? `Focus on your ${weakWords.length} weak words this week — review them daily until they stick.`
-      : 'Keep your daily lesson rhythm going and add one role play this week.'
   }
 
-  // Save the weekly review
   const { data: review, error: reviewError } = await supabase
     .from('weekly_reviews')
     .insert({

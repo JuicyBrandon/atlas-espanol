@@ -30,6 +30,7 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
   const [analyzing, setAnalyzing] = useState(false)
   const [completing, setCompleting] = useState(false)
   const [newLevel, setNewLevel] = useState<number | null>(null)
+  const [completedLevel, setCompletedLevel] = useState<number | null>(null)
 
   const saveWord = (idx: number) => setSavedWords(prev => new Set([...prev, idx]))
 
@@ -66,7 +67,10 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
       })
       if (res.ok) {
         const data = await res.json()
-        if (data.levelUp && data.newLevel) setNewLevel(data.newLevel)
+        if (data.levelUp && data.newLevel) {
+          setNewLevel(data.newLevel)
+          setCompletedLevel(data.completedLevel ?? data.newLevel - 1)
+        }
       }
     } catch {
       // Non-fatal
@@ -297,7 +301,7 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
           </h2>
           <p className="text-white/60 text-sm mb-6">
             {newLevel
-              ? `You completed every lesson at Level ${lesson.level} — welcome to Level ${newLevel}. New lessons and scenarios are now unlocked.`
+              ? `You completed every lesson at Level ${completedLevel ?? newLevel - 1} — welcome to Level ${newLevel}. New lessons and scenarios are now unlocked.`
               : `${lesson.vocabulary.length} words added to your vocabulary bank. Keep the streak going.`}
           </p>
           <div className="grid grid-cols-3 gap-3 mb-6">

@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   // Get current item
   const { data: item, error: fetchError } = await supabase
     .from('vocabulary_items')
-    .select('status, times_seen, times_correct, times_incorrect')
+    .select('status, times_seen, times_correct, times_incorrect, mastered_at')
     .eq('id', itemId)
     .eq('user_id', user.id)
     .single()
@@ -25,6 +25,14 @@ export async function POST(req: NextRequest) {
   const newStatus = advanceVocabStatus(item.status, correct)
   const reviewDue = nextReviewDate(newStatus)
 
+  // Record when a word first reaches mastered; clear it if it drops back
+  const masteredAt =
+    newStatus === 'mastered'
+      ? item.status === 'mastered'
+        ? item.mastered_at
+        : new Date().toISOString()
+      : null
+
   const { error: updateError } = await supabase
     .from('vocabulary_items')
     .update({
@@ -33,6 +41,7 @@ export async function POST(req: NextRequest) {
       times_seen: item.times_seen + 1,
       times_correct: correct ? item.times_correct + 1 : item.times_correct,
       times_incorrect: correct ? item.times_incorrect : item.times_incorrect + 1,
+      mastered_at: masteredAt,
       updated_at: new Date().toISOString(),
     })
     .eq('id', itemId)

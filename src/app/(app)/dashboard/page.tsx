@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { StatsGrid, TodayCard } from '@/components/dashboard/StatsGrid'
 import { levelToLabel, levelToCEFR, calculateStreak } from '@/lib/utils'
-import { computeRecommendation, withinDays } from '@/lib/progress'
+import { computeRecommendation, daysAgoISO, withinDays } from '@/lib/progress'
 import { ArrowRight, MessageCircle, Play, BookMarked, Wand2, Compass } from 'lucide-react'
 import type { DashboardStats, Lesson, SpanishLevel } from '@/types'
 
@@ -30,9 +30,10 @@ export default async function DashboardPage() {
     { data: userData },
     { count: vocabCount },
     { count: dueCount },
-    { count: lessonsCount },
-    { data: completedLessonDates },
+    { data: completedLessons },
     { data: recentMistakes },
+    { data: recentCorrectionsForRec },
+    { data: rolePlayDates },
   ] = await Promise.all([
     supabase.from('users').select('current_level, main_goal, name').eq('id', user.id).single(),
     supabase.from('vocabulary_items').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
@@ -44,65 +45,61 @@ export default async function DashboardPage() {
       .neq('status', 'mastered'),
     supabase
       .from('user_lessons')
-      .select('*', { count: 'exact', head: true })
+      .select('lesson_id, completed_at')
       .eq('user_id', user.id)
       .eq('status', 'completed'),
-    supabase
-      .from('user_lessons')
-      .select('completed_at')
-      .eq('user_id', user.id)
-      .eq('status', 'completed')
-      .not('completed_at', 'is', null),
     supabase
       .from('corrections')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(3),
+    supabase
+      .from('corrections')
+      .select('category, created_at')
+      .eq('user_id', user.id)
+      .gte('created_at', daysAgoISO(14))
+      .limit(100),
+    supabase.from('role_play_sessions').select('created_at').eq('user_id', user.id),
   ])
 
   const currentLevel = (userData?.current_level ?? 1) as SpanishLevel
   const displayName = userData?.name || name
 
+  const lessons = completedLessons ?? []
+  const plays = rolePlayDates ?? []
+
   const streak = calculateStreak(
-    completedLessonDates
-      ?.map(l => l.completed_at)
-      .filter((d): d is string => !!d) ?? []
+    lessons.map(l => l.completed_at).filter((d): d is string => !!d)
   )
 
-  // Find today's lesson (next uncompleted at user's level)
-  let todaysLesson: Lesson | null = null
+  // Today's lesson + progress through the current level
   const { data: levelLessons } = await supabase
     .from('lessons')
     .select('*')
     .eq('level', currentLevel)
     .order('sort_order')
 
-  if (levelLessons?.length) {
-    const { data: completedUserLessons } = await supabase
-      .from('user_lessons')
-      .select('lesson_id')
-      .eq('user_id', user.id)
-      .eq('status', 'completed')
+  const doneIds = new Set(lessons.map(l => l.lesson_id))
+  let todaysLesson: Lesson | null = null
+  let levelProgress = 0
 
-    const doneIds = new Set(completedUserLessons?.map(ul => ul.lesson_id) ?? [])
+  if (levelLessons?.length) {
     todaysLesson = levelLessons.find(l => !doneIds.has(l.id)) ?? levelLessons[0]
+    const completedAtLevel = levelLessons.filter(l => doneIds.has(l.id)).length
+    levelProgress = Math.round((completedAtLevel / levelLessons.length) * 100)
   }
 
-  // Weekly goal: 5 sessions in the last 7 days
-  const lessonsThisWeek = withinDays(completedLessonDates ?? [], l => l.completed_at, 7).length
-  const weeklyProgress = Math.min(Math.round((lessonsThisWeek / 5) * 100), 100)
-
-  // Adaptive recommendation
-  const { count: rolePlayCount } = await supabase
-    .from('role_play_sessions')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
+  // Weekly goal: 5 sessions (lessons + role plays) in the last 7 days
+  const sessionsThisWeek =
+    withinDays(lessons, l => l.completed_at, 7).length +
+    withinDays(plays, p => p.created_at, 7).length
+  const weeklyProgress = Math.min(Math.round((sessionsThisWeek / 5) * 100), 100)
 
   const recommendation = computeRecommendation({
     dueReviews: dueCount ?? 0,
-    recentCorrections: recentMistakes ?? [],
-    rolePlayCount: rolePlayCount ?? 0,
+    recentCorrections: recentCorrectionsForRec ?? [],
+    rolePlayCount: plays.length,
     userLevel: currentLevel,
   })
 
@@ -111,7 +108,7 @@ export default async function DashboardPage() {
     cefrEstimate: levelToCEFR(currentLevel),
     streak,
     vocabularyCount: vocabCount ?? 0,
-    lessonsCompleted: lessonsCount ?? 0,
+    lessonsCompleted: lessons.length,
     weeklyProgress,
     todaysLesson,
     dueForReview: dueCount ?? 0,
@@ -201,7 +198,7 @@ export default async function DashboardPage() {
             <div key={lvl} className="flex items-center gap-3">
               <span className="text-xs text-[#1E2A3A]/40 w-4">{lvl}</span>
               <ProgressBar
-                value={lvl === stats.currentLevel ? stats.weeklyProgress : lvl < stats.currentLevel ? 100 : 0}
+                value={lvl === stats.currentLevel ? levelProgress : lvl < stats.currentLevel ? 100 : 0}
                 color={lvl < stats.currentLevel ? 'green' : lvl === stats.currentLevel ? 'gold' : 'blue'}
                 className="flex-1"
               />

@@ -5,12 +5,13 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import WeeklyReviewCard from '@/components/progress/WeeklyReviewCard'
+import WeeklyActivityChart from '@/components/progress/WeeklyActivityChart'
 import {
   computeSkillScores,
   computeCefrEstimate,
   computeRecommendation,
   computeNextMilestone,
-  buildWeeklyActivity,
+  sessionsSince,
   withinDays,
 } from '@/lib/progress'
 import { calculateStreak, levelToLabel } from '@/lib/utils'
@@ -39,6 +40,8 @@ export default async function ProgressPage() {
     { data: rolePlays },
     { data: completedLessons },
     { data: latestReview },
+    { count: dueCount },
+    { data: allLessonsIndex },
   ] = await Promise.all([
     supabase.from('users').select('current_level, name').eq('id', user.id).single(),
     supabase
@@ -68,6 +71,15 @@ export default async function ProgressPage() {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from('vocabulary_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .lte('review_due_at', new Date().toISOString())
+      .neq('status', 'mastered'),
+    // Curriculum index is small (~72 rows); fetching it inside the batch
+    // avoids a second sequential round trip that would need userLevel first
+    supabase.from('lessons').select('id, level'),
   ])
 
   const userLevel = (userData?.current_level ?? 1) as SpanishLevel
@@ -77,12 +89,9 @@ export default async function ProgressPage() {
   const lessons = completedLessons ?? []
 
   // Lessons completed at the current level (for CEFR progress)
-  const { data: levelLessons } = await supabase
-    .from('lessons')
-    .select('id')
-    .eq('level', userLevel)
-
-  const levelLessonIds = new Set((levelLessons ?? []).map(l => l.id))
+  const levelLessonIds = new Set(
+    (allLessonsIndex ?? []).filter(l => l.level === userLevel).map(l => l.id)
+  )
   const completedAtLevel = lessons.filter(l => levelLessonIds.has(l.lesson_id)).length
 
   const completedDates = lessons
@@ -113,15 +122,11 @@ export default async function ProgressPage() {
     ...completedDates,
     ...plays.map(p => p.created_at),
   ]
-  const weeklyActivity = buildWeeklyActivity(activityTimestamps)
-  const maxDayCount = Math.max(1, ...weeklyActivity.map(d => d.count))
-  const sessionsLast7Days = withinDays(activityTimestamps, t => t, 7).length
 
   // Recommendation
-  const dueCount = 0 // due reviews shown on vocab page; recommendation uses recent corrections here
   const recentCorrections = withinDays(allCorrections, c => c.created_at, 14)
   const recommendation = computeRecommendation({
-    dueReviews: dueCount,
+    dueReviews: dueCount ?? 0,
     recentCorrections,
     rolePlayCount: plays.length,
     userLevel,
@@ -136,10 +141,8 @@ export default async function ProgressPage() {
   })
 
   // Sessions since the last weekly review (for the generator gate)
-  const periodStart = latestReview?.created_at ? new Date(latestReview.created_at).getTime() : 0
-  const sessionsThisPeriod =
-    completedDates.filter(d => new Date(d).getTime() >= periodStart).length +
-    plays.filter(p => new Date(p.created_at).getTime() >= periodStart).length
+  const periodStartISO = latestReview?.created_at ?? new Date(0).toISOString()
+  const sessionsThisPeriod = sessionsSince(completedDates, plays.map(p => p.created_at), periodStartISO)
 
   const summaryStats = [
     { label: 'Lessons', value: lessons.length, icon: BookOpen },
@@ -217,29 +220,7 @@ export default async function ProgressPage() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {/* Weekly activity */}
-        <Card>
-          <h2 className="text-sm font-semibold text-[#1E2A3A] mb-4">This week</h2>
-          <div className="flex items-end justify-between gap-2 h-24">
-            {weeklyActivity.map((day, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5 flex-1">
-                <div className="w-full flex items-end justify-center h-16">
-                  <div
-                    className={`w-full max-w-[28px] rounded-md transition-all ${
-                      day.count > 0 ? 'bg-[#F2C94C]' : 'bg-[#1E2A3A]/8'
-                    }`}
-                    style={{ height: `${Math.max((day.count / maxDayCount) * 100, day.count > 0 ? 20 : 8)}%` }}
-                  />
-                </div>
-                <span className={`text-[10px] ${day.isToday ? 'font-bold text-[#1E2A3A]' : 'text-[#1E2A3A]/40'}`}>
-                  {day.label}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-[#6F4E37]/60 mt-3 text-center">
-            {sessionsLast7Days} sessions in the last 7 days
-          </p>
-        </Card>
+        <WeeklyActivityChart timestamps={activityTimestamps} />
 
         {/* Strongest / weakest */}
         <Card>

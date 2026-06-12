@@ -55,7 +55,7 @@ export function severityColor(severity: 'green' | 'yellow' | 'red'): string {
   }[severity]
 }
 
-const DAY_MS = 86_400_000
+export const DAY_MS = 86_400_000
 
 export function calculateStreak(completedDates: string[]): number {
   if (!completedDates.length) return 0

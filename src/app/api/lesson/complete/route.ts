@@ -54,7 +54,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Adaptive progression: level up when every lesson at the current level is done
-  let levelUp = false
   let newLevel: number | null = null
 
   const { data: userData } = await supabase
@@ -66,31 +65,40 @@ export async function POST(req: NextRequest) {
   const currentLevel = userData?.current_level ?? 1
 
   if (currentLevel < 6) {
-    const { data: levelLessons } = await supabase
-      .from('lessons')
-      .select('id')
-      .eq('level', currentLevel)
-
-    const levelLessonIds = (levelLessons ?? []).map(l => l.id)
-
-    if (levelLessonIds.length > 0) {
-      const { count: completedCount } = await supabase
-        .from('user_lessons')
+    const [{ count: totalAtLevel }, { count: completedCount }] = await Promise.all([
+      supabase
+        .from('lessons')
         .select('*', { count: 'exact', head: true })
+        .eq('level', currentLevel),
+      supabase
+        .from('user_lessons')
+        .select('lesson_id, lessons!inner(level)', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('status', 'completed')
-        .in('lesson_id', levelLessonIds)
+        .eq('lessons.level', currentLevel),
+    ])
 
-      if ((completedCount ?? 0) >= levelLessonIds.length) {
-        newLevel = currentLevel + 1
-        const { error: levelError } = await supabase
-          .from('users')
-          .update({ current_level: newLevel, updated_at: new Date().toISOString() })
-          .eq('id', user.id)
-        levelUp = !levelError
+    if ((totalAtLevel ?? 0) > 0 && (completedCount ?? 0) >= (totalAtLevel ?? 0)) {
+      const candidate = currentLevel + 1
+      const { error: levelError } = await supabase
+        .from('users')
+        .update({ current_level: candidate, updated_at: new Date().toISOString() })
+        .eq('id', user.id)
+
+      if (levelError) {
+        // The user completed their level but the promotion failed — must be
+        // visible in logs, since nothing else will re-trigger it.
+        console.error('Level-up update failed:', levelError.message)
+      } else {
+        newLevel = candidate
       }
     }
   }
 
-  return NextResponse.json({ success: true, levelUp, newLevel: levelUp ? newLevel : null })
+  return NextResponse.json({
+    success: true,
+    levelUp: newLevel !== null,
+    newLevel,
+    completedLevel: newLevel !== null ? currentLevel : null,
+  })
 }

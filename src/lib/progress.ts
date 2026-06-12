@@ -6,10 +6,15 @@
 // ============================================================
 
 import type { CorrectionCategory, CorrectionSeverity, SpanishLevel } from '@/types'
-import { levelToCEFR } from '@/lib/utils'
+import { DAY_MS, levelToCEFR } from '@/lib/utils'
 
 // A weekly review unlocks after this many sessions (lessons + role plays)
 export const SESSIONS_PER_REVIEW = 7
+
+// ISO timestamp for N days ago (for DB query cutoffs)
+export function daysAgoISO(days: number): string {
+  return new Date(Date.now() - days * DAY_MS).toISOString()
+}
 
 // Filter items whose timestamp falls within the last N days
 export function withinDays<T>(
@@ -17,11 +22,27 @@ export function withinDays<T>(
   getTimestamp: (item: T) => string | null | undefined,
   days: number
 ): T[] {
-  const cutoff = Date.now() - days * 86_400_000
+  const cutoff = Date.now() - days * DAY_MS
   return items.filter(item => {
     const t = getTimestamp(item)
     return !!t && new Date(t).getTime() >= cutoff
   })
+}
+
+// The single definition of "sessions since a point in time" used by the
+// weekly-review gate (API) and the progress page UI. A session is a
+// completed lesson or a role play.
+export function sessionsSince(
+  lessonCompletedDates: Array<string | null | undefined>,
+  rolePlayDates: string[],
+  sinceISO: string | null
+): number {
+  const since = sinceISO ? new Date(sinceISO).getTime() : 0
+  const lessons = lessonCompletedDates.filter(
+    (d): d is string => !!d && new Date(d).getTime() >= since
+  ).length
+  const plays = rolePlayDates.filter(d => new Date(d).getTime() >= since).length
+  return lessons + plays
 }
 
 export interface SkillScores {
@@ -67,8 +88,7 @@ export function computeSkillScores(input: ScoreInput): SkillScores {
     : null
 
   // Recent error pressure: red corrections weigh double
-  const twoWeeksAgo = Date.now() - 14 * 86_400_000
-  const recent = corrections.filter(c => new Date(c.created_at).getTime() >= twoWeeksAgo)
+  const recent = withinDays(corrections, c => c.created_at, 14)
   const errorPressure = recent.reduce((acc, c) => acc + (c.severity === 'red' ? 2 : 1), 0)
 
   // Speaking: role play performance; before any role plays, lesson practice is the only signal
@@ -176,6 +196,10 @@ const CATEGORY_LABELS: Partial<Record<CorrectionCategory, string>> = {
   pronunciation: 'pronunciation',
 }
 
+export function labelCategory(category: string): string {
+  return CATEGORY_LABELS[category as CorrectionCategory] ?? category.replace(/_/g, ' ')
+}
+
 export function computeRecommendation(input: {
   dueReviews: number
   recentCorrections: Array<{ category: string }>
@@ -201,7 +225,7 @@ export function computeRecommendation(input: {
   const [topCategory, topCount] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [null, 0]
 
   if (topCategory && topCount >= 3) {
-    const label = CATEGORY_LABELS[topCategory as CorrectionCategory] ?? topCategory
+    const label = labelCategory(topCategory)
     return {
       title: `Work on ${label}`,
       description: `${topCount} of your recent corrections involve ${label}. Review them, then practise with your coach.`,
