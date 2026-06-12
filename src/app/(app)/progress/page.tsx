@@ -14,8 +14,10 @@ import {
   sessionsSince,
   withinDays,
 } from '@/lib/progress'
-import { calculateStreak, levelToLabel } from '@/lib/utils'
-import { TrendingUp, TrendingDown, Flag, ArrowRight, Flame, BookOpen, Play, BookMarked } from 'lucide-react'
+import { computeAchievements, ACHIEVEMENT_CATEGORY_LABELS } from '@/lib/achievements'
+import type { AchievementCategory } from '@/lib/achievements'
+import { calculateStreak, levelToLabel, cn } from '@/lib/utils'
+import { TrendingUp, TrendingDown, Flag, ArrowRight, Flame, BookOpen, Play, BookMarked, Trophy, Lock } from 'lucide-react'
 import type { SpanishLevel, WeeklyReview } from '@/types'
 
 const SKILL_LABELS: Array<{ key: keyof ReturnType<typeof computeSkillScores>; label: string }> = [
@@ -42,6 +44,7 @@ export default async function ProgressPage() {
     { data: latestReview },
     { count: dueCount },
     { data: allLessonsIndex },
+    { count: voiceNotesCount },
   ] = await Promise.all([
     supabase.from('users').select('current_level, name').eq('id', user.id).single(),
     supabase
@@ -80,6 +83,11 @@ export default async function ProgressPage() {
     // Curriculum index is small (~72 rows); fetching it inside the batch
     // avoids a second sequential round trip that would need userLevel first
     supabase.from('lessons').select('id, level'),
+    // voice_notes may not exist yet if migration 004 hasn't been run
+    supabase
+      .from('voice_notes')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id),
   ])
 
   const userLevel = (userData?.current_level ?? 1) as SpanishLevel
@@ -143,6 +151,25 @@ export default async function ProgressPage() {
   // Sessions since the last weekly review (for the generator gate)
   const periodStartISO = latestReview?.created_at ?? new Date(0).toISOString()
   const sessionsThisPeriod = sessionsSince(completedDates, plays.map(p => p.created_at), periodStartISO)
+
+  const masteredCount = vocab.filter(v => v.status === 'mastered').length
+
+  const achievements = computeAchievements({
+    lessonsCompleted: lessons.length,
+    streak,
+    vocabularyCount: vocab.length,
+    masteredCount,
+    rolePlaysCount: plays.length,
+    voiceNotesCount: voiceNotesCount ?? 0,
+    correctionsCount: allCorrections.length,
+    userLevel,
+  })
+
+  const achievementsByCategory = (Object.keys(ACHIEVEMENT_CATEGORY_LABELS) as AchievementCategory[]).map(cat => ({
+    category: cat,
+    label: ACHIEVEMENT_CATEGORY_LABELS[cat],
+    items: achievements.filter(a => a.category === cat),
+  }))
 
   const summaryStats = [
     { label: 'Lessons', value: lessons.length, icon: BookOpen },
@@ -278,6 +305,61 @@ export default async function ProgressPage() {
         latestReview={latestReview as WeeklyReview | null}
         sessionsThisPeriod={sessionsThisPeriod}
       />
+
+      {/* Achievements */}
+      <Card>
+        <div className="flex items-center gap-2 mb-5">
+          <Trophy className="w-4 h-4 text-[#F2C94C]" />
+          <h2 className="text-sm font-semibold text-[#1E2A3A]">Achievements</h2>
+          <span className="ml-auto text-xs text-[#6F4E37]/50">
+            {achievements.filter(a => a.earned).length} / {achievements.length}
+          </span>
+        </div>
+        <div className="space-y-6">
+          {achievementsByCategory.map(({ category, label, items }) => (
+            <div key={category}>
+              <p className="text-[10px] font-semibold text-[#1E2A3A]/40 uppercase tracking-widest mb-3">{label}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {items.map(a => (
+                  <div
+                    key={a.slug}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all',
+                      a.earned
+                        ? 'bg-[#F2C94C]/10 border-[#F2C94C]/40'
+                        : 'bg-[#F8F4EC] border-[#1E2A3A]/6'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                      a.earned ? 'bg-[#F2C94C]/25' : 'bg-[#1E2A3A]/8'
+                    )}>
+                      {a.earned
+                        ? <Trophy className="w-3.5 h-3.5 text-[#B8902A]" />
+                        : <Lock className="w-3 h-3 text-[#1E2A3A]/25" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn(
+                        'text-xs font-medium truncate',
+                        a.earned ? 'text-[#1E2A3A]' : 'text-[#1E2A3A]/40'
+                      )}>
+                        {a.title}
+                      </p>
+                      <p className="text-[10px] text-[#1E2A3A]/35 truncate">{a.description}</p>
+                    </div>
+                    {!a.earned && a.progressTotal > 1 && (
+                      <span className="text-[10px] text-[#1E2A3A]/30 shrink-0 tabular-nums">
+                        {a.progressCurrent}/{a.progressTotal}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   )
 }
