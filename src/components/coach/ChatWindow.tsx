@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Button from '@/components/ui/Button'
+import VoiceButton from '@/components/ui/VoiceButton'
 import { cn, severityColor } from '@/lib/utils'
 import { Send, Globe } from 'lucide-react'
 import type { ChatMessage } from '@/types'
@@ -110,14 +111,19 @@ export default function ChatWindow({ messages, onSend, loading, placeholder }: C
 
       {/* Input */}
       <div className="border-t border-[#1E2A3A]/8 p-4">
-        <div className="flex gap-3 items-end">
+        <div className="flex gap-2 items-end">
+          <VoiceButton
+            size="sm"
+            onTranscription={(text) => setInput(prev => prev ? `${prev} ${text}` : text)}
+            disabled={loading}
+          />
           <textarea
             className="flex-1 resize-none rounded-xl border border-[#1E2A3A]/15 bg-[#F8F4EC] px-4 py-3 text-sm text-[#1E2A3A] placeholder:text-[#1E2A3A]/35 focus:outline-none focus:border-[#4A90E2] focus:ring-2 focus:ring-[#4A90E2]/20 min-h-[48px] max-h-[120px] transition-all"
             rows={1}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder={placeholder ?? 'Type in Spanish or ask your coach…'}
+            placeholder={placeholder ?? 'Type or speak in Spanish…'}
           />
           <Button
             onClick={handleSend}
@@ -128,7 +134,7 @@ export default function ChatWindow({ messages, onSend, loading, placeholder }: C
             <Send className="w-4 h-4" />
           </Button>
         </div>
-        <p className="text-[10px] text-[#1E2A3A]/30 mt-2 text-center">Enter to send · Shift+Enter for new line</p>
+        <p className="text-[10px] text-[#1E2A3A]/30 mt-2 text-center">Enter to send · Shift+Enter for new line · Mic to speak</p>
       </div>
     </div>
   )

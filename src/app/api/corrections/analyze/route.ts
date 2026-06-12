@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { text, userLevel = 1 } = await req.json()
+  const { text, userLevel = 1, context = 'text' } = await req.json()
 
   if (!text?.trim()) return NextResponse.json({ error: 'No text provided' }, { status: 400 })
 
@@ -46,7 +46,11 @@ export async function POST(req: NextRequest) {
   if (!isAIConfigured()) {
     result = getMockAnalysis(text)
   } else {
-    const prompt = `Analyse this Spanish text written by a Level ${userLevel}/6 learner of Colombian Spanish.
+    const voiceNote = context === 'voice'
+      ? ' This was transcribed from spoken voice — be lenient about filler words (pues, eh, ¿no?), incomplete sentences, and natural spoken rhythm. Only flag genuine errors, not spoken-language patterns.'
+      : ''
+
+    const prompt = `Analyse this Spanish text from a Level ${userLevel}/6 learner of Colombian Spanish.${voiceNote}
 
 Text: "${text}"
 

@@ -182,6 +182,17 @@ export interface WeeklyReview {
   created_at: string
 }
 
+export interface VoiceNote {
+  id: string
+  user_id?: string
+  transcript: string
+  corrected_text: string | null
+  severity: string | null
+  explanation: string | null
+  duration_seconds: number | null
+  created_at: string
+}
+
 // ============================================================
 // Onboarding Form State
 // ============================================================
