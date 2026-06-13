@@ -6,7 +6,8 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { severityColor, severityLabel } from '@/lib/utils'
-import { CheckCircle, ChevronRight, BookOpen, Volume2, AlertCircle } from 'lucide-react'
+import { CheckCircle, ChevronRight, BookOpen, AlertCircle } from 'lucide-react'
+import PronounceButton from '@/components/ui/PronounceButton'
 import type { Lesson, CorrectionSeverity, CorrectionCategory } from '@/types'
 
 interface CorrectionResult {
@@ -150,9 +151,7 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="font-semibold text-[#1E2A3A]">{v.spanish}</p>
-                    <button className="text-[#1E2A3A]/30 hover:text-[#4A90E2] transition-colors">
-                      <Volume2 className="w-3.5 h-3.5" />
-                    </button>
+                    <PronounceButton text={v.spanish} />
                   </div>
                   <p className="text-sm text-[#6F4E37]/70">{v.english}</p>
                   {v.colombian && v.colombian !== v.spanish && (

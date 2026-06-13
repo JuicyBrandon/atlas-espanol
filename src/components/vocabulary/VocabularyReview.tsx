@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import Button from '@/components/ui/Button'
 import { CheckCircle, XCircle, RotateCcw, ChevronRight } from 'lucide-react'
+import PronounceButton from '@/components/ui/PronounceButton'
 import type { VocabularyItem } from '@/types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -150,7 +151,10 @@ export default function VocabularyReview({ items }: Props) {
             </div>
 
             <div className="flex-1 flex flex-col items-center justify-center text-center py-4">
-              <p className="text-3xl font-bold text-[#1E2A3A] mb-2">{card.spanish}</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-3xl font-bold text-[#1E2A3A]">{card.spanish}</p>
+                <PronounceButton text={card.spanish} size={5} />
+              </div>
               {card.natural_colombian && card.natural_colombian !== card.spanish && (
                 <p className="text-sm text-[#4A90E2]">Colombian: {card.natural_colombian}</p>
               )}
