@@ -78,6 +78,9 @@ export default function LessonPlayer({ lesson }: { lesson: Lesson }) {
     } finally {
       setCompleting(false)
       setStep('complete')
+      // Refresh server components so the dashboard/sidebar show the updated
+      // streak, completed count, and vocab bank without a stale cache.
+      router.refresh()
     }
   }
 

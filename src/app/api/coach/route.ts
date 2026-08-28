@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
 
   const { messages, userLevel = 1 } = await req.json()
 
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return NextResponse.json({ error: 'Invalid or empty messages array' }, { status: 400 })
+  }
+
   if (!isAIConfigured()) {
     const lastMsg = (messages[messages.length - 1]?.content as string) ?? ''
     return NextResponse.json({ content: getMockResponse(lastMsg) })
@@ -44,10 +48,16 @@ export async function POST(req: NextRequest) {
     const model = getAIModel()
     const levelNote = `\n\nUser's current level: ${userLevel}/6 (1=absolute beginner, 6=professional fluency). Adapt all responses accordingly.`
 
+    // Some providers (e.g. Anthropic) require the first message to be from the
+    // user. The chat seeds an assistant greeting, so drop anything before the
+    // first user message.
+    const firstUserIndex = messages.findIndex((m: { role: string }) => m.role === 'user')
+    const apiMessages = firstUserIndex > 0 ? messages.slice(firstUserIndex) : messages
+
     const result = await streamText({
       model,
       system: SYSTEM_PROMPT + levelNote,
-      messages: messages.map((m: { role: string; content: string }) => ({
+      messages: apiMessages.map((m: { role: string; content: string }) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),

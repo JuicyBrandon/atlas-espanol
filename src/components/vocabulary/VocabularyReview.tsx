@@ -57,8 +57,9 @@ export default function VocabularyReview({ items }: Props) {
       setSubmitting(false)
     }
 
-    // If incorrect, add card back to end of queue for repeat
-    if (!correct && current === queue.length - 1) {
+    // If incorrect, add the card back to the end of the queue for another
+    // attempt — active recall repeats a missed card regardless of position.
+    if (!correct) {
       setQueue(prev => [...prev, { ...card, status: 'learning' }])
     }
 

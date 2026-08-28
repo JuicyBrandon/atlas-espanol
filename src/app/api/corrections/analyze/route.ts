@@ -74,7 +74,10 @@ Severity: green = correct and natural, yellow = understandable but awkward, red 
         messages: [{ role: 'user', content: prompt }],
         maxOutputTokens: 512,
       })
-      result = JSON.parse(raw) as AnalysisResult
+      // LLMs often wrap JSON in markdown fences despite instructions — strip
+      // them before parsing so a valid response isn't lost to the mock fallback.
+      const clean = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      result = JSON.parse(clean) as AnalysisResult
     } catch {
       result = getMockAnalysis(text)
     }

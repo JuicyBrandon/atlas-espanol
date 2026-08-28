@@ -69,9 +69,12 @@ export default async function DashboardPage() {
   const lessons = completedLessons ?? []
   const plays = rolePlayDates ?? []
 
-  const streak = calculateStreak(
-    lessons.map(l => l.completed_at).filter((d): d is string => !!d)
-  )
+  // Streak counts any learning activity (lessons or role plays) — matches the
+  // sidebar and progress page so all three always show the same number.
+  const streak = calculateStreak([
+    ...lessons.map(l => l.completed_at).filter((d): d is string => !!d),
+    ...plays.map(p => p.created_at).filter((d): d is string => !!d),
+  ])
 
   // Today's lesson + progress through the current level
   const { data: levelLessons } = await supabase
