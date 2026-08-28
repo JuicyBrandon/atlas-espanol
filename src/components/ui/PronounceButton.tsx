@@ -1,22 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Volume2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PronounceButtonProps {
   text: string
+  voice?: 'salome' | 'gonzalo'
   className?: string
   size?: number
 }
 
-// Speaks Colombian Spanish using the browser's built-in Web Speech API.
-// No API key or network needed — works offline in all modern browsers.
-export default function PronounceButton({ text, className, size = 3.5 }: PronounceButtonProps) {
+// Plays Colombian Spanish pronunciation. Tries the server /api/tts endpoint
+// first (authentic Azure es-CO voice); if that isn't configured or fails,
+// falls back to the browser's built-in Web Speech API so it always works.
+export default function PronounceButton({ text, voice = 'salome', className, size = 3.5 }: PronounceButtonProps) {
   const [speaking, setSpeaking] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const speak = () => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return
+  const browserSpeak = () => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      setSpeaking(false)
+      return
+    }
     const synth = window.speechSynthesis
     synth.cancel()
 
@@ -33,11 +39,9 @@ export default function PronounceButton({ text, className, size = 3.5 }: Pronoun
       if (preferred) utter.voice = preferred
     }
 
-    utter.onstart = () => setSpeaking(true)
     utter.onend = () => setSpeaking(false)
     utter.onerror = () => setSpeaking(false)
 
-    // Voices may not be loaded on the first call — wait for them if needed.
     if (synth.getVoices().length === 0) {
       synth.addEventListener(
         'voiceschanged',
@@ -51,6 +55,41 @@ export default function PronounceButton({ text, className, size = 3.5 }: Pronoun
       assignVoice()
       synth.speak(utter)
     }
+  }
+
+  const speak = async () => {
+    setSpeaking(true)
+
+    // Stop any in-flight browser speech.
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel()
+    }
+
+    try {
+      const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}`)
+      // 204 (not configured) / 502 (provider error) → browser fallback.
+      if (res.ok && res.headers.get('content-type')?.includes('audio')) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audioRef.current = audio
+        audio.onended = () => {
+          setSpeaking(false)
+          URL.revokeObjectURL(url)
+        }
+        audio.onerror = () => {
+          setSpeaking(false)
+          URL.revokeObjectURL(url)
+          browserSpeak()
+        }
+        await audio.play()
+        return
+      }
+    } catch {
+      // Network error — fall through to browser speech.
+    }
+
+    browserSpeak()
   }
 
   return (

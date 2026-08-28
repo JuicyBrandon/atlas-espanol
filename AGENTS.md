@@ -160,6 +160,13 @@ AI_MODEL=llama-3.3-70b-versatile            # model name override (optional)
 ```
 
 App runs fully without an AI key — mock responses are used as a fallback.
+
+```
+# Colombian Spanish pronunciation audio (optional) — Azure Neural TTS
+# Provides authentic es-CO voices (Salomé / Gonzalo). Without these,
+# pronunciation falls back to the browser's built-in Web Speech API.
+AZURE_SPEECH_KEY=...
+AZURE_SPEECH_REGION=eastus     # your Speech resource's region
 ```
 
 ---
