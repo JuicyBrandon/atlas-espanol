@@ -5,38 +5,16 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { StatsGrid, TodayCard } from '@/components/dashboard/StatsGrid'
-import { levelToLabel, levelToCEFR } from '@/lib/utils'
-import { ArrowRight, MessageCircle, Play, BookMarked, Zap } from 'lucide-react'
-import type { DashboardStats } from '@/types'
-
-// Mock stats for Sprint 1 — replaced by real Supabase queries in Sprint 2
-const MOCK_STATS: DashboardStats = {
-  currentLevel: 1,
-  cefrEstimate: 'A0',
-  streak: 3,
-  vocabularyCount: 0,
-  lessonsCompleted: 0,
-  weeklyProgress: 15,
-  todaysLesson: {
-    id: 'mock-lesson-1',
-    level: 1,
-    module_name: 'Greetings and Introductions',
-    lesson_title: 'Hola Colombia — Your First Words',
-    lesson_goal: 'Greet people confidently and introduce yourself in Colombian Spanish',
-    vocabulary: [],
-    grammar_focus: 'Ser — to be (identity)',
-    scenario: 'Meeting someone new at a café in Bogotá',
-    created_at: new Date().toISOString(),
-  },
-  dueForReview: 0,
-  recentMistakes: [],
-}
+import { levelToLabel, levelToCEFR, calculateStreak } from '@/lib/utils'
+import { computeRecommendation, daysAgoISO, withinDays } from '@/lib/progress'
+import { ArrowRight, MessageCircle, Play, BookMarked, Wand2, Compass } from 'lucide-react'
+import type { DashboardStats, Lesson, SpanishLevel } from '@/types'
 
 const QUICK_ACTIONS = [
   { href: '/coach', icon: MessageCircle, label: 'Chat with Coach', color: 'text-[#4A90E2]', bg: 'bg-[#4A90E2]/10' },
   { href: '/roleplays', icon: Play, label: 'Role Play', color: 'text-[#27AE60]', bg: 'bg-[#27AE60]/10' },
   { href: '/vocabulary', icon: BookMarked, label: 'Review Words', color: 'text-[#F2994A]', bg: 'bg-[#F2994A]/10' },
-  { href: '/lesson', icon: Zap, label: 'Quick Lesson', color: 'text-[#F2C94C]', bg: 'bg-[#F2C94C]/10' },
+  { href: '/colombianise', icon: Wand2, label: 'Colombianise It', color: 'text-[#F2C94C]', bg: 'bg-[#F2C94C]/10' },
 ]
 
 export default async function DashboardPage() {
@@ -46,7 +24,99 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   const name = user.user_metadata?.name ?? 'there'
-  const stats = MOCK_STATS
+
+  // Parallel queries
+  const [
+    { data: userData },
+    { count: vocabCount },
+    { count: dueCount },
+    { data: completedLessons },
+    { data: recentMistakes },
+    { data: recentCorrectionsForRec },
+    { data: rolePlayDates },
+  ] = await Promise.all([
+    supabase.from('users').select('current_level, main_goal, name').eq('id', user.id).single(),
+    supabase.from('vocabulary_items').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase
+      .from('vocabulary_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .lte('review_due_at', new Date().toISOString())
+      .neq('status', 'mastered'),
+    supabase
+      .from('user_lessons')
+      .select('lesson_id, completed_at')
+      .eq('user_id', user.id)
+      .eq('status', 'completed'),
+    supabase
+      .from('corrections')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3),
+    supabase
+      .from('corrections')
+      .select('category, created_at')
+      .eq('user_id', user.id)
+      .gte('created_at', daysAgoISO(14))
+      .limit(100),
+    supabase.from('role_play_sessions').select('created_at').eq('user_id', user.id),
+  ])
+
+  const currentLevel = (userData?.current_level ?? 1) as SpanishLevel
+  const displayName = userData?.name || name
+
+  const lessons = completedLessons ?? []
+  const plays = rolePlayDates ?? []
+
+  // Streak counts any learning activity (lessons or role plays) — matches the
+  // sidebar and progress page so all three always show the same number.
+  const streak = calculateStreak([
+    ...lessons.map(l => l.completed_at).filter((d): d is string => !!d),
+    ...plays.map(p => p.created_at).filter((d): d is string => !!d),
+  ])
+
+  // Today's lesson + progress through the current level
+  const { data: levelLessons } = await supabase
+    .from('lessons')
+    .select('*')
+    .eq('level', currentLevel)
+    .order('sort_order')
+
+  const doneIds = new Set(lessons.map(l => l.lesson_id))
+  let todaysLesson: Lesson | null = null
+  let levelProgress = 0
+
+  if (levelLessons?.length) {
+    todaysLesson = levelLessons.find(l => !doneIds.has(l.id)) ?? levelLessons[0]
+    const completedAtLevel = levelLessons.filter(l => doneIds.has(l.id)).length
+    levelProgress = Math.round((completedAtLevel / levelLessons.length) * 100)
+  }
+
+  // Weekly goal: 5 sessions (lessons + role plays) in the last 7 days
+  const sessionsThisWeek =
+    withinDays(lessons, l => l.completed_at, 7).length +
+    withinDays(plays, p => p.created_at, 7).length
+  const weeklyProgress = Math.min(Math.round((sessionsThisWeek / 5) * 100), 100)
+
+  const recommendation = computeRecommendation({
+    dueReviews: dueCount ?? 0,
+    recentCorrections: recentCorrectionsForRec ?? [],
+    rolePlayCount: plays.length,
+    userLevel: currentLevel,
+  })
+
+  const stats: DashboardStats = {
+    currentLevel,
+    cefrEstimate: levelToCEFR(currentLevel),
+    streak,
+    vocabularyCount: vocabCount ?? 0,
+    lessonsCompleted: lessons.length,
+    weeklyProgress,
+    todaysLesson,
+    dueForReview: dueCount ?? 0,
+    recentMistakes: recentMistakes ?? [],
+  }
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -61,7 +131,7 @@ export default async function DashboardPage() {
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-[#6F4E37]/60 font-medium">{greeting()},</p>
-          <h1 className="text-2xl font-bold text-[#1E2A3A] tracking-tight">{name}</h1>
+          <h1 className="text-2xl font-bold text-[#1E2A3A] tracking-tight">{displayName}</h1>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant="navy">{levelToLabel(stats.currentLevel)}</Badge>
             <Badge variant="gold">{levelToCEFR(stats.currentLevel)}</Badge>
@@ -85,6 +155,25 @@ export default async function DashboardPage() {
         weeklyProgress={stats.weeklyProgress}
       />
 
+      {/* Recommended next action */}
+      <Link
+        href={recommendation.href}
+        className="flex items-center justify-between gap-3 bg-white rounded-2xl border border-[#F2C94C]/40 p-4 hover:shadow-md hover:-translate-y-[1px] transition-all duration-200"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#F2C94C]/15 flex items-center justify-center shrink-0">
+            <Compass className="w-5 h-5 text-[#B8902A]" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#1E2A3A]">{recommendation.title}</p>
+            <p className="text-xs text-[#6F4E37]/70 truncate">{recommendation.description}</p>
+          </div>
+        </div>
+        <span className="text-xs font-medium text-[#4A90E2] shrink-0 inline-flex items-center gap-1">
+          {recommendation.cta} <ArrowRight className="w-3 h-3" />
+        </span>
+      </Link>
+
       {/* Quick actions */}
       <div>
         <h2 className="text-sm font-semibold text-[#1E2A3A]/50 uppercase tracking-wide mb-3">Quick actions</h2>
@@ -93,7 +182,7 @@ export default async function DashboardPage() {
             <Link
               key={href}
               href={href}
-              className="bg-white rounded-2xl border border-[#1E2A3A]/8 p-4 flex flex-col items-center gap-2 hover:shadow-md hover:-translate-y-[1px] transition-all duration-200 group"
+              className="bg-white rounded-2xl border border-[#1E2A3A]/8 p-4 flex flex-col items-center gap-2 hover:shadow-md hover:-translate-y-[1px] transition-all duration-200"
             >
               <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center`}>
                 <Icon className={`w-5 h-5 ${color}`} />
@@ -108,21 +197,49 @@ export default async function DashboardPage() {
       <Card>
         <h2 className="text-sm font-semibold text-[#1E2A3A] mb-4">Level progress</h2>
         <div className="space-y-3">
-          {[1, 2, 3, 4, 5, 6].map(lvl => (
+          {([1, 2, 3, 4, 5, 6] as SpanishLevel[]).map(lvl => (
             <div key={lvl} className="flex items-center gap-3">
               <span className="text-xs text-[#1E2A3A]/40 w-4">{lvl}</span>
               <ProgressBar
-                value={lvl === stats.currentLevel ? stats.weeklyProgress : lvl < stats.currentLevel ? 100 : 0}
+                value={lvl === stats.currentLevel ? levelProgress : lvl < stats.currentLevel ? 100 : 0}
                 color={lvl < stats.currentLevel ? 'green' : lvl === stats.currentLevel ? 'gold' : 'blue'}
                 className="flex-1"
               />
               <span className="text-xs text-[#6F4E37]/50 w-20 text-right truncate">
-                {levelToLabel(lvl as 1)}
+                {levelToLabel(lvl)}
               </span>
             </div>
           ))}
         </div>
       </Card>
+
+      {/* Recent mistakes */}
+      {stats.recentMistakes.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[#1E2A3A]">Recent corrections</h2>
+            <Link href="/corrections" className="text-xs text-[#4A90E2] hover:underline">
+              View all
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {stats.recentMistakes.map(c => (
+              <div key={c.id} className="flex items-start gap-2 py-2 border-b border-[#1E2A3A]/5 last:border-0">
+                <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                  c.severity === 'green' ? 'bg-emerald-500' :
+                  c.severity === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
+                }`} />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-[#1E2A3A] truncate">{c.original_text}</p>
+                  {c.corrected_text !== c.original_text && (
+                    <p className="text-xs text-[#6F4E37]/60 truncate">→ {c.corrected_text}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

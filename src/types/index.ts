@@ -76,15 +76,24 @@ export interface UserProfile {
   updated_at: string
 }
 
+// Vocabulary word as stored in the lessons.vocabulary JSONB column
+export interface LessonWord {
+  spanish: string
+  english: string
+  colombian: string
+  note?: string
+}
+
 export interface Lesson {
   id: string
   level: SpanishLevel
   module_name: string
   lesson_title: string
   lesson_goal: string
-  vocabulary: VocabularyItem[]
+  vocabulary: LessonWord[]
   grammar_focus: string
   scenario: string
+  sort_order: number
   created_at: string
 }
 
@@ -170,6 +179,17 @@ export interface WeeklyReview {
   new_words_mastered: number
   weak_words: string[]
   next_focus: string
+  created_at: string
+}
+
+export interface VoiceNote {
+  id: string
+  user_id?: string
+  transcript: string
+  corrected_text: string | null
+  severity: string | null
+  explanation: string | null
+  duration_seconds: number | null
   created_at: string
 }
 

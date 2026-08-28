@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-import { levelToLabel, levelToCEFR } from '@/lib/utils'
+import { levelToCEFR } from '@/lib/utils'
 import { Flame, BookOpen, Star, Clock } from 'lucide-react'
 import type { DashboardStats } from '@/types'
 
@@ -72,7 +72,7 @@ export function TodayCard({ lesson, dueForReview, weeklyProgress }: TodayCardPro
   return (
     <div className="grid md:grid-cols-3 gap-4">
       <Card variant="navy" className="md:col-span-2">
-        <p className="text-[#F2C94C] text-xs font-medium uppercase tracking-wide mb-2">Today's Lesson</p>
+        <p className="text-[#F2C94C] text-xs font-medium uppercase tracking-wide mb-2">Today&apos;s Lesson</p>
         {lesson ? (
           <>
             <h2 className="text-xl font-bold text-white mb-1">{lesson.lesson_title}</h2>

@@ -5,17 +5,16 @@ import ChatWindow from '@/components/coach/ChatWindow'
 import { Badge } from '@/components/ui/Badge'
 import type { ChatMessage } from '@/types'
 
-const SYSTEM_STUB = `You are Atlas Español, an expert Colombian Spanish fluency coach. Your job is to guide the user toward professional working fluency in Colombian Spanish. Prioritise comprehension, communication, and confidence over grammar rules. Use Australian English for explanations. Use Colombian Spanish for examples. Correct major errors after the conversation ends, not mid-flow. Keep a warm, encouraging, professional tone.`
-
 export default function CoachPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
-      content: '¡Hola! Soy Atlas, tu coach de español colombiano. ¿Cómo te llamas y por qué estás aprendiendo español? Tell me in whatever mix of Spanish and English you\'re comfortable with — I\'ll adapt to where you\'re at.',
+      content: '¡Quiubo! Soy Atlas, tu coach de español colombiano. ¿Cómo te llamas y por qué estás aprendiendo español? Tell me in whatever mix of Spanish and English you\'re comfortable with — I\'ll adapt to where you\'re at.',
       timestamp: new Date().toISOString(),
     },
   ])
   const [loading, setLoading] = useState(false)
+  const [userLevel] = useState(1)
 
   const handleSend = async (text: string) => {
     const userMsg: ChatMessage = {
@@ -23,19 +22,78 @@ export default function CoachPage() {
       content: text,
       timestamp: new Date().toISOString(),
     }
-    setMessages(prev => [...prev, userMsg])
+
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
     setLoading(true)
 
+    const placeholder: ChatMessage = {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toISOString(),
+    }
+    setMessages(prev => [...prev, placeholder])
+
     try {
-      // TODO: replace with real API call in Sprint 3
-      // Using mock response for Sprint 1
-      await new Promise(r => setTimeout(r, 1200))
-      const mock: ChatMessage = {
-        role: 'assistant',
-        content: getMockResponse(text),
-        timestamp: new Date().toISOString(),
+      const res = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          userLevel,
+        }),
+      })
+
+      const contentType = res.headers.get('content-type') ?? ''
+
+      if (contentType.includes('text/plain') && res.body) {
+        // Streaming response — show loading until first token, then update live
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let fullText = ''
+        let firstChunk = true
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          fullText += decoder.decode(value, { stream: true })
+
+          if (firstChunk) {
+            setLoading(false)
+            firstChunk = false
+          }
+
+          setMessages(prev => {
+            const updated = [...prev]
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: fullText,
+            }
+            return updated
+          })
+        }
+      } else {
+        // JSON fallback (mock mode)
+        const data = await res.json()
+        setMessages(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            content: data.content ?? '¡Disculpa! Something went wrong. Try again in a moment.',
+          }
+          return updated
+        })
       }
-      setMessages(prev => [...prev, mock])
+    } catch {
+      setMessages(prev => {
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content: '¡Disculpa! I couldn\'t connect right now. Try again in a moment.',
+        }
+        return updated
+      })
     } finally {
       setLoading(false)
     }
@@ -49,8 +107,8 @@ export default function CoachPage() {
           <p className="text-sm text-[#6F4E37]/60">Your personal Colombian Spanish coach</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="success">Level 1</Badge>
-          <Badge variant="default">General Colombian</Badge>
+          <Badge variant="success">Level {userLevel}</Badge>
+          <Badge variant="default">Colombian Spanish</Badge>
         </div>
       </div>
       <div className="h-[calc(100vh-200px)] md:h-[600px]">
@@ -63,18 +121,4 @@ export default function CoachPage() {
       </div>
     </div>
   )
-}
-
-function getMockResponse(input: string): string {
-  const lower = input.toLowerCase()
-  if (lower.includes('hola') || lower.includes('hello')) {
-    return '¡Quiubo! That\'s the spirit — "hola" works everywhere, but in Colombia you\'ll hear "quiubo" (from "¿qué hubo?") constantly. It\'s the most natural casual greeting. Try using it next time!'
-  }
-  if (lower.includes('name') || lower.includes('llamo') || lower.includes('soy')) {
-    return '¡Qué bueno conocerte! In Colombia, both "Me llamo..." and "Soy..." work perfectly. Colombians tend to be very warm when meeting people — they\'ll often add "Un placer" (a pleasure) or "Mucho gusto". What brings you to Colombian Spanish specifically?'
-  }
-  if (lower.includes('?') || lower.includes('how') || lower.includes('cómo')) {
-    return 'Great question! Colombian Spanish is considered one of the clearest and most neutral accents in Latin America — which makes it ideal for learning. Bogotá Spanish in particular is known for precise pronunciation. What\'s something specific you\'d like to be able to say?'
-  }
-  return `¡Muy bien! You\'re making a great start. I noticed you wrote: "${input}". That\'s a solid attempt. In natural Colombian Spanish, you might also hear this expressed as... keep practising and we\'ll build your confidence one conversation at a time. ¿Seguimos?`
 }

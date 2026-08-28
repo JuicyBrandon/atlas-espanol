@@ -42,7 +42,7 @@ export default function LandingPage() {
         </div>
         <h1 className="text-5xl md:text-6xl font-bold text-[#1E2A3A] tracking-tight leading-tight mb-6">
           Learn Colombian Spanish<br />
-          <span className="text-[#F2C94C]">the way it's actually spoken</span>
+          <span className="text-[#F2C94C]">the way it&apos;s actually spoken</span>
         </h1>
         <p className="text-lg text-[#6F4E37]/80 leading-relaxed max-w-2xl mx-auto mb-10">
           An AI-powered fluency coach that takes you from complete beginner to professional Colombian Spanish — through real conversations, not generic exercises.

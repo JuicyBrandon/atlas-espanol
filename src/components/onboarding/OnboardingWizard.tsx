@@ -51,9 +51,17 @@ export default function OnboardingWizard() {
 
   const submit = async () => {
     setLoading(true)
-    // TODO: save onboarding data to Supabase user_profile
-    await new Promise(r => setTimeout(r, 1500)) // simulate
-    router.push('/dashboard')
+    try {
+      await fetch('/api/onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+    } catch {
+      // Non-fatal — proceed to dashboard regardless
+    } finally {
+      router.push('/dashboard')
+    }
   }
 
   const variants = {
@@ -140,7 +148,7 @@ function StepContent({
             Bienvenido a Atlas
           </h1>
           <p className="text-[#6F4E37]/80 mb-8 leading-relaxed">
-            Your personal Colombian Spanish fluency coach. We'll get you from zero to conversational — and beyond.
+            Your personal Colombian Spanish fluency coach. We&apos;ll get you from zero to conversational — and beyond.
           </p>
           <Button size="lg" className="w-full" onClick={onNext}>
             Get started <ChevronRight className="w-4 h-4" />
@@ -174,7 +182,7 @@ function StepContent({
     case 'level':
       return (
         <div>
-          <h2 className="text-xl font-bold text-[#1E2A3A] mb-1">What's your Spanish like right now?</h2>
+          <h2 className="text-xl font-bold text-[#1E2A3A] mb-1">What&apos;s your Spanish like right now?</h2>
           <p className="text-sm text-[#6F4E37]/70 mb-5">Be honest — your coach adapts to where you actually are.</p>
           <div className="space-y-2">
             {LEVELS.map(l => (
@@ -216,7 +224,7 @@ function StepContent({
     case 'goals':
       return (
         <div>
-          <h2 className="text-xl font-bold text-[#1E2A3A] mb-1">What's driving you to learn?</h2>
+          <h2 className="text-xl font-bold text-[#1E2A3A] mb-1">What&apos;s driving you to learn?</h2>
           <p className="text-sm text-[#6F4E37]/70 mb-5">Your coach tailors everything around this.</p>
           <div className="space-y-2">
             {LEARNING_GOALS.map(g => (
@@ -255,7 +263,7 @@ function StepContent({
       return (
         <div>
           <h2 className="text-xl font-bold text-[#1E2A3A] mb-1">Which Colombian accent appeals to you?</h2>
-          <p className="text-sm text-[#6F4E37]/70 mb-5">You'll learn general Colombian Spanish either way — this just flavours it.</p>
+          <p className="text-sm text-[#6F4E37]/70 mb-5">You&apos;ll learn general Colombian Spanish either way — this just flavours it.</p>
           <div className="space-y-2">
             {COLOMBIAN_FOCUS_OPTIONS.map(f => (
               <button
