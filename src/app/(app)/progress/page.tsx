@@ -105,7 +105,11 @@ export default async function ProgressPage() {
   const completedDates = lessons
     .map(l => l.completed_at)
     .filter((d): d is string => !!d)
-  const streak = calculateStreak(completedDates)
+  // Streak counts any learning activity (lessons or role plays) — matches the sidebar.
+  const streak = calculateStreak([
+    ...completedDates,
+    ...plays.map(p => p.created_at).filter((d): d is string => !!d),
+  ])
 
   const scores = computeSkillScores({
     vocabItems: vocab,
